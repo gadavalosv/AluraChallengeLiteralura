@@ -1,29 +1,30 @@
 package com.gadv.literalura.main;
 
-import com.gadv.literalura.model.Book;
-import com.gadv.literalura.model.BookData;
-import com.gadv.literalura.model.Data;
+import com.gadv.literalura.model.*;
+import com.gadv.literalura.repository.AuthorRepository;
 import com.gadv.literalura.repository.BookRepository;
 import com.gadv.literalura.service.ConsultAPI;
 import com.gadv.literalura.service.ConvertData;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Scanner;
 
 public class Main {
     private ConsultAPI consultAPI = new ConsultAPI();
     private final String URL_BASE = "https://gutendex.com/books/?";
     private ConvertData convertData = new ConvertData();
-    @Autowired
     private final BookRepository bookRepository;
+    private final AuthorRepository authorRepository;
     private List<Book> bookList;
+    private List<Author> authorList;
 
-    public Main(BookRepository bookRepository) {
+    public Main(BookRepository bookRepository, AuthorRepository authorRepository) {
         this.bookRepository = bookRepository;
+        this.authorRepository = authorRepository;
     }
 
     public void showMenu(Scanner scanner) {
@@ -75,21 +76,39 @@ public class Main {
     }
 
     private void showBooksByLanguage(Scanner scanner) {
-        //
+        System.out.println("""
+        Por favor Ingrese el código del idioma que desea buscar:
+            es - Español
+            en - Inglés
+            fr - Francés
+            pt - Portugués
+        """);
+        String languageToSearch = scanner.nextLine();
+        String formattedLanguage = "{\"" + Languages.fromString(languageToSearch).toString() + "\"}";
+        System.out.println(formattedLanguage);
+        bookRepository.getBooksByLanguages(formattedLanguage).stream()
+                .forEach(System.out::println);
     }
 
     private void showAuthorsByYearLiving(Scanner scanner) {
-        //
+        System.out.println("Ingrese el año del que desea buscar:");
+        int yearToSearch = scanner.nextInt();
+        scanner.nextLine();
+        authorRepository.findAuthorsLiveInYear(yearToSearch).stream()
+                .forEach(author -> System.out.println(author.printFullAuthor()));
     }
 
     private void showRegisteredAuthors() {
-        //
+        authorList = authorRepository.findAll();
+        authorList.stream()
+                .sorted(Comparator.comparing(Author::getName))
+                .forEach(author -> System.out.println(author.printFullAuthor()));
     }
 
     private void showRegisteredBooks() {
         bookList = bookRepository.findAll();
         bookList.stream()
-                .sorted(Comparator.comparing(Book::getTitle)) //MY VERSION: .sorted(Comparator.comparing(serie -> serie.getGenre(0)))
+                .sorted(Comparator.comparing(Book::getTitle))
                 .forEach(System.out::println);
     }
 
@@ -100,7 +119,20 @@ public class Main {
             return;
         }
         Book book = new Book(booksData);
-        bookRepository.save(book);
+        //bookRepository.save(book);
+        saveBookIfNotExists(book);
         System.out.println(book);
+    }
+
+    private void saveBookIfNotExists(Book book) {
+        Optional<Book> existingBook = bookRepository.findByTitleAndLanguagesListAndDownloadCount(
+                book.getTitle(),
+                book.getLanguagesList(),
+                book.getDownloadCount()
+        );
+
+        if (existingBook.isEmpty()) {
+            bookRepository.save(book);
+        }
     }
 }
